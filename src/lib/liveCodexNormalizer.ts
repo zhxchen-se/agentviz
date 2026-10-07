@@ -1,4 +1,4 @@
-import { codexLive as helpers } from "./codexParser";
+import { codexLive as helpers, getCodexToolDuration } from "./codexParser";
 import {
   EventIndex, NumericIndex, ToolResultIndex, buildUserTurns, lowerBound, upperBound,
   type LiveNormalizer, type RawRecord,
@@ -34,7 +34,22 @@ export class LiveCodexNormalizer implements LiveNormalizer {
   private webBarrier = -1;
   private pendingTurns = new Set<string>();
   private turnOrder = new Map<string, number>();
-  private pairs = new ToolResultIndex(this.index);
+  private userTurnEnds = new WeakMap<SessionTurn, NumericIndex>();
+  private pairs = new ToolResultIndex(this.index, getCodexToolDuration, (position, event) => {
+    const bucket = this.owners[position];
+    if (bucket) {
+      bucket.ends.set(position, event.t + event.duration);
+      this.refresh(bucket);
+    } else {
+      const turn = this.turns[event.turnIndex!];
+      const ends = turn && this.userTurnEnds.get(turn);
+      if (ends) {
+        ends.set(position, event.t + event.duration);
+        turn.endTime = ends.max;
+        this.index.work.turns++;
+      }
+    }
+  });
   get work() { return this.index.work; }
 
   private target(event: NormalizedEvent): Bucket {
@@ -300,6 +315,16 @@ export class LiveCodexNormalizer implements LiveNormalizer {
         if (from > 0) index.events[from - 1].turnIndex = this.turns.length - 1;
       }
       buildUserTurns(index, this.turns, from, true);
+      for (let i = from; i < index.events.length; i++) {
+        const event = index.events[i];
+        const turn = this.turns[event.turnIndex!];
+        let ends = this.userTurnEnds.get(turn);
+        if (!ends) {
+          ends = new NumericIndex();
+          this.userTurnEnds.set(turn, ends);
+        }
+        ends.set(i, event.t + event.duration);
+      }
     }
     for (const slot of changedCalls) {
       if (slot.position < insertion) index.set(slot.position, { ...index.events[slot.position], toolCallId: slot.event.toolCallId });

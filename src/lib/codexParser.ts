@@ -323,6 +323,15 @@ function pushToolCallEvent(events: NormalizedEvent[], record: RawRecord, state: 
   }));
 }
 
+// Measure the observed call-to-result interval, never synthetic event spacing.
+export function getCodexToolDuration(call: NormalizedEvent, result: NormalizedEvent | undefined): number | undefined {
+  if (!result) return undefined;
+  const start = parseTimestamp((call.raw as RawRecord | undefined)?.timestamp);
+  const end = parseTimestamp((result.raw as RawRecord | undefined)?.timestamp);
+  if (start === null || end === null || end < start) return undefined;
+  return end - start;
+}
+
 function getOutputText(payload: Record<string, any>): string {
   if (typeof payload.output === "string") return payload.output;
   if (payload.stdout || payload.stderr) {
@@ -437,6 +446,15 @@ function buildEvents(records: RawRecord[], state: ParseState): NormalizedEvent[]
   }
 
   events.sort(function (left, right) { return left.t - right.t; });
+  const results = new Map<string, NormalizedEvent>();
+  for (const event of events) {
+    if (event.track === "context" && event.toolCallId) results.set(event.toolCallId, event);
+  }
+  for (const event of events) {
+    if (event.track !== "tool_call" || !event.toolCallId) continue;
+    const duration = getCodexToolDuration(event, results.get(event.toolCallId));
+    if (duration !== undefined) event.duration = duration;
+  }
   return events;
 }
 

@@ -212,7 +212,7 @@ describe("parseCodexJSONL", function () {
     ].join("\n");
 
     const result = parseCodexJSONL(text);
-    expect(result?.metadata.duration).toBeCloseTo(0.5, 5);
+    expect(result?.metadata.duration).toBeCloseTo(0.4, 5);
   });
 
   it("reindexes turns after dropping empty lifecycle turns", function () {

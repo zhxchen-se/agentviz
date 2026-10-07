@@ -23,6 +23,21 @@ AGENTVIZ retains normalization state for Claude Code, Copilot CLI, Codex rollout
 
 Global changes are not incorrectly treated as constant work. A changed timestamp origin or Claude timestamp-majority decision can affect the entire timeline. An out-of-order event or a structural request edit can shift an entire suffix of public evidence indices. New reasoning-effort or lifecycle information can affect earlier events. These changes explicitly invalidate affected state rather than leaving stale timestamps, memberships, totals, or tool outputs. They may require history-sized work when history-sized output changes.
 
+## Codex tool timing
+
+Completed Codex tool calls use the original call and matching result timestamps,
+paired by `call_id`, for their observed duration. Function calls, custom tools,
+patch completion events, and associated web searches share this rule. Parallel
+calls retain independent intervals. Updated results use the latest result in
+timeline order, matching output pairing.
+
+Live results update the affected call and indexed session/turn duration maxima,
+including earlier turns, without revisiting unrelated history. Missing or invalid
+timestamps, missing results, and a result preceding its call retain the existing
+display-duration fallback; they do not provide a measured tool duration. An early
+return from a background command measures that tool invocation only, not the
+command's entire lifetime across subsequent polling calls.
+
 ## Deterministic work and measurements
 
 `normalizationWork` reports records/requests examined, event visits or updates, and turn membership/aggregate updates for the last append. Counts include affected old records, not just newly decoded lines. A VS Code patch plus its normalized request counts as two record/request operations. Counts are instrumentation, not CPU instruction counts. Separate regressions intercept turn-array `splice` to ensure completion updates do not hide history-sized index shifts.

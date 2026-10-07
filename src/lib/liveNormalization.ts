@@ -154,7 +154,11 @@ export class ToolResultIndex {
   private resultKeys = new Map<number, string>();
   private calls = new Map<string, Set<number>>();
   private candidates = new Map<number, { ids: string[]; original: NormalizedEvent }>();
-  constructor(private index: EventIndex) {}
+  constructor(
+    private index: EventIndex,
+    private durationForResult?: (call: NormalizedEvent, result: NormalizedEvent | undefined) => number | undefined,
+    private durationChanged?: (position: number, event: NormalizedEvent) => void,
+  ) {}
   remove(position: number): void {
     const candidate = this.candidates.get(position);
     if (candidate) {
@@ -200,18 +204,26 @@ export class ToolResultIndex {
     const candidate = this.candidates.get(position);
     if (!candidate) return;
     let output = candidate.original.toolOutput;
+    let matchedResult: NormalizedEvent | undefined;
     for (const id of candidate.ids) {
       const result = this.results.get(id);
       if (result && result.positions.max !== -Infinity) {
         output = result.text.get(result.positions.max);
-        if (output) break;
+        if (output) {
+          matchedResult = this.index.events[result.positions.max];
+          break;
+        }
       }
     }
     const event = this.index.events[position];
-    if (event.toolOutput !== output) {
-      const paired = { ...event, toolOutput: output };
+    const duration = this.durationForResult
+      ? this.durationForResult(candidate.original, matchedResult) ?? candidate.original.duration
+      : event.duration;
+    if (event.toolOutput !== output || event.duration !== duration) {
+      const paired = { ...event, toolOutput: output, duration };
       if (output === undefined && !("toolOutput" in candidate.original)) delete paired.toolOutput;
       this.index.set(position, paired);
+      if (event.duration !== duration) this.durationChanged?.(position, paired);
     }
   }
 }
